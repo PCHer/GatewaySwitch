@@ -6,7 +6,7 @@ When you enable **Passthrough Mode**, your Mac's IP configuration is set to manu
 
 ## Screenshot
 
-![Dropdown](Dropdown.png)
+<img src="Dropdown.png" alt="Dropdown" width="50%">
 
 ## Features
 
