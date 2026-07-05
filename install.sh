@@ -8,7 +8,8 @@ URL="https://github.com/$REPO/releases/download/$VERSION/$APP_NAME-1.0.zip"
 
 echo "Downloading $APP_NAME $VERSION..."
 cd /tmp
-curl -#LO "$URL"
+rm -f "$APP_NAME-1.0.zip"
+curl -fsSL#O "$URL"
 
 echo "Extracting..."
 unzip -oq "$APP_NAME-1.0.zip"
