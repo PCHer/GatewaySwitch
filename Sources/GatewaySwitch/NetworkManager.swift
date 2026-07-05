@@ -36,7 +36,7 @@ class NetworkManager: ObservableObject {
         }
     }
 
-    private var activeService: String?
+    private var activeServices: [String] = []
     private var refreshTimer: Timer?
 
     init() {
@@ -47,7 +47,6 @@ class NetworkManager: ObservableObject {
         currentGateway = Self.localized("Loading...", lang: language)
         publicIP = Self.localized("Fetching...", lang: language)
         Task {
-            await detectActiveService()
             await refresh()
             await fetchPublicIPInfo()
         }
@@ -145,7 +144,7 @@ class NetworkManager: ObservableObject {
     }
 
     private func getSubnetInfo() async -> (ip: String?, mask: String?, router: String?) {
-        let service = activeService ?? "Wi-Fi"
+        let service = activeServices.first ?? "Wi-Fi"
         guard let output = await shell("/usr/sbin/networksetup", "-getinfo", service) else { return (nil, nil, nil) }
         var ip: String?, mask: String?, router: String?
         for line in output.components(separatedBy: .newlines) {
@@ -226,7 +225,7 @@ class NetworkManager: ObservableObject {
     }
 
     func refresh() async {
-        await detectActiveService()
+        activeServices = await detectActiveServices()
         currentDNS = await getCurrentDNSText()
         currentGateway = await getCurrentGatewayText()
         currentMode = detectMode()
@@ -237,8 +236,12 @@ class NetworkManager: ObservableObject {
         isSwitching = true
         errorMessage = nil
 
-        let service = shellArg(activeService ?? "Wi-Fi")
-        let script = "/usr/sbin/networksetup -setdhcp \(service) && /usr/sbin/networksetup -setdnsservers \(service) empty"
+        let services = activeServices.isEmpty ? ["Wi-Fi"] : activeServices
+        let cmds = services.flatMap { s in
+            let a = shellArg(s)
+            return ["/usr/sbin/networksetup -setdhcp \(a)", "/usr/sbin/networksetup -setdnsservers \(a) empty"]
+        }
+        let script = cmds.joined(separator: " && ")
         var errors = [String]()
         if let e = runPrivilegedScript(script) { errors.append(e) }
         finish(errors: errors)
@@ -249,7 +252,7 @@ class NetworkManager: ObservableObject {
         isSwitching = true
         errorMessage = nil
 
-        let service = activeService ?? "Wi-Fi"
+        let service = activeServices.first ?? "Wi-Fi"
         let (currentIP, currentMask, _) = await getSubnetInfo()
         guard let ip = currentIP, let mask = currentMask else {
             errorMessage = "Failed to read current IP/mask"
@@ -296,23 +299,23 @@ class NetworkManager: ObservableObject {
         }
     }
 
-    private func detectActiveService() async {
+    private func detectActiveServices() async -> [String] {
         let output = await shell("/usr/sbin/networksetup", "-listallnetworkservices")
-        guard let lines = output?.components(separatedBy: .newlines) else { return }
+        guard let lines = output?.components(separatedBy: .newlines) else { return [] }
+        var services = [String]()
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, !trimmed.hasPrefix("*"), !trimmed.hasPrefix("An asterisk") else { continue }
             if let info = await shell("/usr/sbin/networksetup", "-getinfo", trimmed),
                info.contains("IP address:") && !info.contains("IPv6") {
-                activeService = trimmed
-                return
+                services.append(trimmed)
             }
         }
-        activeService = "Wi-Fi"
+        return services
     }
 
     private func getCurrentDNSText() async -> String {
-        let service = activeService ?? "Wi-Fi"
+        let service = activeServices.first ?? "Wi-Fi"
         guard let output = await shell("/usr/sbin/networksetup", "-getdnsservers", service) else { return "Error" }
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed.lowercased().contains("there aren't any") {
@@ -322,7 +325,7 @@ class NetworkManager: ObservableObject {
     }
 
     private func getCurrentGatewayText() async -> String {
-        let service = activeService ?? "Wi-Fi"
+        let service = activeServices.first ?? "Wi-Fi"
         guard let output = await shell("/usr/sbin/networksetup", "-getinfo", service) else { return "Error" }
         for line in output.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)

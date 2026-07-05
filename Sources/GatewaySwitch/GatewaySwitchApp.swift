@@ -162,6 +162,11 @@ struct MenuBarView: View {
             Button(networkManager.tr("Quit")) {
                 NSApplication.shared.terminate(nil)
             }
+
+            Text("v\(Bundle.main.appVersion) (\(Bundle.main.buildDate))")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding()
         .frame(width: 280)
@@ -169,6 +174,21 @@ struct MenuBarView: View {
             await networkManager.refresh()
             await networkManager.fetchPublicIPInfo()
         }
+    }
+}
+
+extension Bundle {
+    var appVersion: String {
+        infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    var buildDate: String {
+        guard let path = executablePath,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let date = attrs[.modificationDate] as? Date else { return "" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm"
+        return fmt.string(from: date)
     }
 }
 
