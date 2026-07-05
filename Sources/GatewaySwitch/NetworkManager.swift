@@ -237,15 +237,10 @@ class NetworkManager: ObservableObject {
         isSwitching = true
         errorMessage = nil
 
-        let service = activeService ?? "Wi-Fi"
+        let service = shellArg(activeService ?? "Wi-Fi")
+        let script = "/usr/sbin/networksetup -setdhcp \(service) && /usr/sbin/networksetup -setdnsservers \(service) empty"
         var errors = [String]()
-
-        let setErr = runPrivileged("/usr/sbin/networksetup", arguments: ["-setdhcp", service])
-        if let e = setErr { errors.append("DHCP: \(e)") }
-
-        let dnsErr = runPrivileged("/usr/sbin/networksetup", arguments: ["-setdnsservers", service, "empty"])
-        if let e = dnsErr { errors.append("DNS: \(e)") }
-
+        if let e = runPrivilegedScript(script) { errors.append(e) }
         finish(errors: errors)
     }
 
@@ -262,14 +257,10 @@ class NetworkManager: ObservableObject {
             return
         }
 
+        let a = { self.shellArg($0) }
+        let script = "/usr/sbin/networksetup -setmanual \(a(service)) \(a(ip)) \(a(mask)) \(a(passthroughIP)) && /usr/sbin/networksetup -setdnsservers \(a(service)) \(a(passthroughIP))"
         var errors = [String]()
-
-        let manualErr = runPrivileged("/usr/sbin/networksetup", arguments: ["-setmanual", service, ip, mask, passthroughIP])
-        if let e = manualErr { errors.append("Manual: \(e)") }
-
-        let dnsErr = runPrivileged("/usr/sbin/networksetup", arguments: ["-setdnsservers", service, passthroughIP])
-        if let e = dnsErr { errors.append("DNS: \(e)") }
-
+        if let e = runPrivilegedScript(script) { errors.append(e) }
         finish(errors: errors)
     }
 
@@ -416,15 +407,21 @@ class NetworkManager: ObservableObject {
         }
     }
 
+    private func shellArg(_ arg: String) -> String {
+        "'\(arg.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
     @discardableResult
     private func runPrivileged(_ command: String, arguments: [String]) -> String? {
-        let escapedArgs = arguments.map { arg in
-            "'\(arg.replacingOccurrences(of: "'", with: "'\\''"))'"
-        }.joined(separator: " ")
-        let shellCommand = "\(command) \(escapedArgs)"
-        let fullEscaped = shellCommand.replacingOccurrences(of: "\\", with: "\\\\")
-                                      .replacingOccurrences(of: "\"", with: "\\\"")
-        let asSource = "do shell script \"\(fullEscaped)\" with administrator privileges"
+        let args = arguments.map(shellArg).joined(separator: " ")
+        return runPrivilegedScript("\(command) \(args)")
+    }
+
+    @discardableResult
+    private func runPrivilegedScript(_ shellCommand: String) -> String? {
+        let escaped = shellCommand.replacingOccurrences(of: "\\", with: "\\\\")
+                                  .replacingOccurrences(of: "\"", with: "\\\"")
+        let asSource = "do shell script \"\(escaped)\" with administrator privileges"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", asSource]
