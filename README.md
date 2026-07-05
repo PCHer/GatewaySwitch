@@ -4,6 +4,10 @@ A macOS menu bar app to switch your network configuration between your ISP route
 
 When you enable **Passthrough Mode**, your Mac's IP configuration is set to manual with the side-router as the default gateway and DNS server. When you switch back to **Normal**, the network service reverts to DHCP and clears custom DNS — all with one click.
 
+## Screenshot
+
+![Dropdown](Dropdown.png)
+
 ## Features
 
 - **Normal mode** — Reverts to DHCP (auto-assigned IP, router, and DNS)
